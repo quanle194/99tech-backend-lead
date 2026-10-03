@@ -9,4 +9,6 @@ export const config = {
     env === 'test'
       ? process.env.DATABASE_URL_TEST ?? 'postgres://wallet:wallet@localhost:5439/wallet_test'
       : process.env.DATABASE_URL ?? 'postgres://wallet:wallet@localhost:5439/wallet',
+  pspWebhookSecret: process.env.PSP_WEBHOOK_SECRET || undefined,
+  pspAllowUnsigned: process.env.PSP_ALLOW_UNSIGNED === 'true',
 };

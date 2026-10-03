@@ -10,7 +10,8 @@ export function useServer(): () => string {
   let server: Server;
   let url = '';
   beforeAll((done) => {
-    server = createApp().listen(0, () => {
+    // The brief's mock PSP sends unsigned callbacks; signature handling has its own test file.
+    server = createApp({ pspAllowUnsigned: true }).listen(0, () => {
       url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
       done();
     });

@@ -1,6 +1,8 @@
 import express, { ErrorRequestHandler } from 'express';
 import { ZodError } from 'zod';
+import { config } from './config';
 import { AppError } from './lib/errors';
+import { RawBodyRequest, verifyPspSignature } from './lib/pspSignature';
 import { healthRouter } from './routes/health';
 import { membersRouter } from './routes/members';
 import { depositsRouter } from './routes/deposits';
@@ -31,14 +33,20 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   res.status(500).json({ error: 'internal_error' });
 };
 
-export function createApp() {
+export function createApp(
+  options: { pspWebhookSecret?: string; pspAllowUnsigned?: boolean } = {
+    pspWebhookSecret: config.pspWebhookSecret,
+    pspAllowUnsigned: config.pspAllowUnsigned,
+  },
+) {
   const app = express();
-  app.use(express.json());
+  // Keep the raw bytes: the callback signature is computed over them, not over re-serialised JSON.
+  app.use(express.json({ verify: (req, _res, buf) => ((req as RawBodyRequest).rawBody = buf) }));
 
   app.use('/health', healthRouter);
   app.use('/members', membersRouter);
   app.use('/deposits', depositsRouter);
-  app.use('/psp/callbacks', pspCallbacksRouter);
+  app.use('/psp/callbacks', verifyPspSignature(options.pspWebhookSecret, options.pspAllowUnsigned ?? false), pspCallbacksRouter);
   app.use('/wallets', walletsRouter);
   app.use('/withdrawals', withdrawalsRouter);
 
