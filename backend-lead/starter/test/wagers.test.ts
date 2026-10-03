@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { Wallet, WalletTx } from '../src/db/models';
+import { sequelize } from '../src/db/sequelize';
 import { assertWalletInvariants, useTestDb } from './helpers/db';
 import { createDeposit, createWallet, fundWallet, placeWager, sendCallback } from './helpers/factories';
 import { useServer } from './helpers/server';
@@ -59,6 +60,24 @@ describe('POST /wallets/:walletId/wagers', () => {
     expect(wallet!.balance).toBe('0.000000000000000000');
     expect(wallet!.turnoverAccrued).toBe('100.000000000000000000');
     expect(await WalletTx.count({ where: { walletId, type: 'Wager' } })).toBe(10);
+    await assertWalletInvariants(walletId);
+  });
+
+  it('a wager stuck behind a held wallet lock gets a retryable 503 and moves no money', async () => {
+    const { memberId, walletId } = await createWallet();
+    await fundWallet(app(), memberId, '100');
+    const holder = await sequelize.transaction();
+    try {
+      await Wallet.findOne({ where: { id: walletId }, lock: holder.LOCK.NO_KEY_UPDATE, transaction: holder });
+
+      const res = await placeWager(app(), walletId, '10');
+
+      expect(res.status).toBe(503);
+      expect(res.body).toEqual({ error: 'lock_timeout', retryable: true });
+    } finally {
+      await holder.rollback();
+    }
+    expect((await Wallet.findByPk(walletId))!.balance).toBe('100.000000000000000000');
     await assertWalletInvariants(walletId);
   });
 

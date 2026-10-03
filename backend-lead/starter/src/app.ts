@@ -17,7 +17,11 @@ const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(err.status).json({ error: err.code, ...err.details });
     return;
   }
-  // express.json() parse failures carry type 'entity.parse.failed'.
+  // lock_not_available: lock_timeout expired waiting for a wallet or funding transaction lock.
+  if (err?.parent?.code === '55P03') {
+    res.status(503).json({ error: 'lock_timeout', retryable: true });
+    return;
+  }
   if (err?.type === 'entity.parse.failed') {
     res.status(400).json({ error: 'invalid_json' });
     return;

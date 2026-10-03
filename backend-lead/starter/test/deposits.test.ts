@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { createApp } from '../src/app';
 import { FundingTx, Wallet, WalletTx } from '../src/db/models';
+import { sequelize } from '../src/db/sequelize';
 import { assertWalletInvariants, useTestDb } from './helpers/db';
 import { createWallet } from './helpers/factories';
 
@@ -38,6 +39,20 @@ describe('POST /deposits', () => {
     expect(first.body.turnoverMultiplier).toBe(1);
     expect(first.body.pspRef).not.toBe(second.body.pspRef);
     expect(await FundingTx.count({ where: { memberId, status: 'Pending' } })).toBe(2);
+  });
+
+  it('is not blocked by a wager or withdrawal holding the wallet lock', async () => {
+    const { memberId, walletId } = await createWallet();
+    const holder = await sequelize.transaction();
+    try {
+      await Wallet.findOne({ where: { id: walletId }, lock: holder.LOCK.NO_KEY_UPDATE, transaction: holder });
+
+      const res = await request(app).post('/deposits').send({ memberId, amount: '10' });
+
+      expect(res.status).toBe(201);
+    } finally {
+      await holder.rollback();
+    }
   });
 
   it('returns 404 for an unknown member', async () => {
