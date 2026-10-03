@@ -71,10 +71,11 @@ Each concurrency test was checked to fail with its lock removed. That caught a f
 One deliberate one: some business rules are re-checked in plpgsql (above). Additions: uuid validation on the starter's wallet route, `toMoneyString`, error mappings (400, 401, 503), pool and timeouts, the signature middleware. Dependencies added: none.
 
 ## Known limitations
-- Signing uses one secret, with no replay window.
+- Signing: one secret, no replay window.
 - Mismatches and `completed` after `failed` wait in `deposits_needing_reconciliation`, unalerted.
-- No audit retention or withdrawal approval.
+- No audit retention.
 - Review fixes after the first build were squashed into thematic commits.
+- The extras exceed the 4-hour budget.
 - Two business rules live in both TypeScript and plpgsql.
 
 ## What I would do next
