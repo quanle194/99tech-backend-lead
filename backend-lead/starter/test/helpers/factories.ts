@@ -35,3 +35,7 @@ export async function fundWallet(app: App, memberId: string, amount: string, tur
 export function placeWager(app: App, walletId: string, amount: string) {
   return request(app).post(`/wallets/${walletId}/wagers`).send({ amount });
 }
+
+export function requestWithdrawal(app: App, memberId: string, amount: string) {
+  return request(app).post('/withdrawals').send({ memberId, amount });
+}
