@@ -30,6 +30,11 @@ describe('POST /members', () => {
     expect(walletRes.body.balance).toBe('0.000000000000000000');
   });
 
+  it('rejects a malformed member id with 400 instead of a database error', async () => {
+    const res = await request(app).get('/members/not-a-uuid/wallet');
+    expect(res.status).toBe(400);
+  });
+
   it('rejects an invalid username', async () => {
     const res = await request(app).post('/members').send({ username: 'x' });
     expect(res.status).toBe(400);

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import * as memberService from '../services/memberService';
+import { uuid } from '../lib/validation';
 
 export const membersRouter = Router();
 
@@ -23,7 +24,8 @@ membersRouter.post('/', async (req, res, next) => {
 
 membersRouter.get('/:memberId/wallet', async (req, res, next) => {
   try {
-    const wallet = await memberService.getWalletByMemberId(req.params.memberId);
+    const memberId = uuid.parse(req.params.memberId);
+    const wallet = await memberService.getWalletByMemberId(memberId);
     if (!wallet) {
       res.status(404).json({ error: 'wallet not found' });
       return;
