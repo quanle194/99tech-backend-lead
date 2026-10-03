@@ -33,6 +33,8 @@ module.exports = {
   },
 
   async down(queryInterface) {
-    await queryInterface.dropTable('psp_callback_events');
+    await queryInterface.sequelize.transaction(async (transaction) => {
+      await queryInterface.dropTable('psp_callback_events', { transaction });
+    });
   },
 };

@@ -16,11 +16,11 @@ export interface PspCallback {
 // Rejected outcomes are returned, not thrown, so the audit row commits with them.
 export async function handleCallback(callback: PspCallback): Promise<{ deposit: FundingTx; outcome: CallbackOutcome }> {
   return sequelize.transaction(async (t) => {
-    // Lock #1. Concurrent deliveries of the same pspRef queue here; each one re-reads the status
+    // Concurrent deliveries of the same pspRef queue on this lock; each one re-reads the status
     // committed by the one before it.
     const deposit = await FundingTx.findOne({
       where: { pspRef: callback.pspRef, type: 'Deposit' },
-      lock: t.LOCK.UPDATE,
+      lock: t.LOCK.NO_KEY_UPDATE,
       transaction: t,
     });
     if (!deposit) {
@@ -41,14 +41,16 @@ export async function handleCallback(callback: PspCallback): Promise<{ deposit: 
     } else {
       await transition(t, deposit, target);
       if (target === 'Completed') {
-        // Lock #2: wallet after funding tx, the same order everywhere.
         const wallet = await walletService.lockWallet(t, { id: deposit.walletId });
+        if (!wallet || deposit.turnoverMultiplier === null) {
+          throw new Error(`Deposit ${deposit.id} violates its foreign key or type CHECK`);
+        }
         const amount = dec(deposit.amount);
-        await walletService.applyEntry(t, wallet!, {
+        await walletService.applyEntry(t, wallet, {
           type: 'Deposit',
           amount,
           fundingTxId: deposit.id,
-          turnoverRequiredDelta: amount.multipliedBy(deposit.turnoverMultiplier!),
+          turnoverRequiredDelta: amount.multipliedBy(deposit.turnoverMultiplier),
         });
       }
       outcome = 'Applied';

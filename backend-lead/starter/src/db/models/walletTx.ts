@@ -9,6 +9,8 @@ export class WalletTx extends Model {
   declare type: WalletTxType;
   declare amount: string;
   declare balanceAfter: string;
+  declare turnoverRequiredAfter: string;
+  declare turnoverAccruedAfter: string;
   declare fundingTxId: string | null;
 }
 
@@ -20,6 +22,8 @@ export function initWalletTx(sequelize: Sequelize): void {
       type: { type: DataTypes.STRING(16), allowNull: false },
       amount: { type: DataTypes.DECIMAL(36, 18), allowNull: false },
       balanceAfter: { type: DataTypes.DECIMAL(36, 18), allowNull: false },
+      turnoverRequiredAfter: { type: DataTypes.DECIMAL(36, 18), allowNull: false, defaultValue: '0' },
+      turnoverAccruedAfter: { type: DataTypes.DECIMAL(36, 18), allowNull: false, defaultValue: '0' },
       fundingTxId: { type: DataTypes.UUID, allowNull: true },
     },
     { sequelize, tableName: 'wallet_txs', underscored: true, updatedAt: false },

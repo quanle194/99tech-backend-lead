@@ -13,8 +13,7 @@ export function canTransition(from: FundingTxStatus, to: FundingTxStatus): boole
   return TRANSITIONS[from].includes(to);
 }
 
-// The conditional UPDATE is a second guard behind the row lock: if a future caller forgets the lock,
-// a concurrent transition matches zero rows and this throws instead of applying twice.
+// Backstop for the row lock: if a caller ever skips it, a racing transition matches zero rows and throws.
 export async function transition(t: Transaction, fundingTx: FundingTx, to: FundingTxStatus): Promise<void> {
   const from = fundingTx.status;
   if (!canTransition(from, to)) {

@@ -1,4 +1,6 @@
+import { Op } from 'sequelize';
 import { Response } from 'supertest';
+import { FundingTx } from '../src/db/models';
 import { assertWalletInvariants, useTestDb } from './helpers/db';
 import { createDeposit, createWallet, placeWager, requestWithdrawal, sendCallback } from './helpers/factories';
 import { useServer } from './helpers/server';
@@ -17,7 +19,8 @@ function prng(seed: number): () => number {
   };
 }
 
-const seed = process.env.SEED ? parseInt(process.env.SEED, 10) : Date.now() % 1_000_000;
+// Fixed by default so every run is reproducible; SEED=<n> explores other interleavings.
+const seed = process.env.SEED ? parseInt(process.env.SEED, 10) : 20261003;
 
 describe('randomized concurrent money movement', () => {
   it(`keeps every wallet invariant under a random concurrent mix (seed ${seed})`, async () => {
@@ -53,6 +56,11 @@ describe('randomized concurrent money movement', () => {
 
       const unexpected = responses.filter((r) => ![200, 201, 409, 422].includes(r.status));
       expect(unexpected.map((r) => ({ status: r.status, body: r.body }))).toEqual([]);
+      // Exactly once: one 'applied' response per deposit that left Pending, however many deliveries raced.
+      const settled = await FundingTx.count({
+        where: { pspRef: { [Op.in]: deposits.map((d) => d.pspRef) }, status: { [Op.ne]: 'Pending' } },
+      });
+      expect(responses.filter((r) => r.body.outcome === 'applied')).toHaveLength(settled);
       for (const wallet of wallets) {
         await assertWalletInvariants(wallet.walletId);
       }

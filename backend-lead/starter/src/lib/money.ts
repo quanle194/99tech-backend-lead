@@ -19,3 +19,5 @@ export function toMoneyString(value: BigNumber): string {
 }
 
 export const ZERO = dec(0);
+
+export { BigNumber };
