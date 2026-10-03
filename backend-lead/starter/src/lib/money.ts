@@ -13,4 +13,9 @@ export function dec(value: string | number | BigNumber): BigNumber {
   return bn;
 }
 
+// Same 18-decimal string shape Postgres returns for DECIMAL(36,18).
+export function toMoneyString(value: BigNumber): string {
+  return value.toFixed(18);
+}
+
 export const ZERO = dec(0);
