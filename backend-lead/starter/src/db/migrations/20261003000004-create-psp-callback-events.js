@@ -29,11 +29,28 @@ module.exports = {
          FOR EACH ROW EXECUTE FUNCTION reject_append_only_mutation()`,
         { transaction },
       );
+      // The operations queue for money the PSP may hold but we have not credited: a deposit that is not
+      // Completed and received a mismatched amount or a `completed` after failing.
+      await queryInterface.sequelize.query(
+        `CREATE VIEW deposits_needing_reconciliation AS
+         SELECT f.id AS funding_tx_id, f.wallet_id, f.psp_ref, f.status, f.amount AS expected_amount,
+                e.amount AS reported_amount, e.outcome, e.received_at
+         FROM funding_txs f
+         JOIN LATERAL (
+           SELECT amount, outcome, received_at FROM psp_callback_events
+           WHERE funding_tx_id = f.id
+             AND (outcome = 'AmountMismatch' OR (outcome = 'InvalidTransition' AND status = 'completed'))
+           ORDER BY id DESC LIMIT 1
+         ) e ON true
+         WHERE f.type = 'Deposit' AND f.status <> 'Completed'`,
+        { transaction },
+      );
     });
   },
 
   async down(queryInterface) {
     await queryInterface.sequelize.transaction(async (transaction) => {
+      await queryInterface.sequelize.query('DROP VIEW deposits_needing_reconciliation', { transaction });
       await queryInterface.dropTable('psp_callback_events', { transaction });
     });
   },

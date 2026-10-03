@@ -2,14 +2,14 @@ import { Router } from 'express';
 import { z } from 'zod';
 import * as pspCallbackService from '../services/pspCallbackService';
 import { dec, toMoneyString } from '../lib/money';
-import { moneyString } from '../lib/validation';
+import { callbackAmount } from '../lib/validation';
 
 export const pspCallbacksRouter = Router();
 
 const callbackBody = z.object({
   pspRef: z.string().min(1).max(128),
   status: z.enum(['completed', 'failed']),
-  amount: moneyString,
+  amount: callbackAmount,
 });
 
 // 2xx only when the callback's intent is applied (now or earlier), so PSP retries are harmless.

@@ -1,7 +1,7 @@
 import request from 'supertest';
 import { FundingTx, PspCallbackEvent, Wallet, WalletTx } from '../src/db/models';
-import { assertWalletInvariants, useTestDb } from './helpers/db';
-import { createDeposit, createWallet, sendCallback } from './helpers/factories';
+import { assertWalletInvariants, rows, useTestDb } from './helpers/db';
+import { createDeposit, createWallet, placeWager, sendCallback } from './helpers/factories';
 import { useServer } from './helpers/server';
 
 useTestDb();
@@ -170,6 +170,68 @@ describe('POST /psp/callbacks', () => {
     });
     expect(await outcomes(id)).toEqual(['Applied', 'AmountMismatch']);
     await assertWalletInvariants(walletId);
+  });
+
+  it('a late duplicate callback after the balance moved changes nothing', async () => {
+    const { memberId, walletId } = await createWallet();
+    const { pspRef } = await createDeposit(app(), memberId, '100');
+    await sendCallback(app(), pspRef, 'completed', '100');
+    await placeWager(app(), walletId, '40');
+
+    const late = await sendCallback(app(), pspRef, 'completed', '100');
+
+    expect(late.status).toBe(200);
+    expect(late.body.outcome).toBe('duplicate');
+    const wallet = await Wallet.findByPk(walletId);
+    expect(wallet!.balance).toBe('60.000000000000000000');
+    expect(await WalletTx.count({ where: { walletId } })).toBe(2);
+    await assertWalletInvariants(walletId);
+  });
+
+  it('an amount above the request cap (minor units sent by mistake) is audited as a mismatch, not dropped', async () => {
+    const { memberId, walletId } = await createWallet();
+    const { id, pspRef } = await createDeposit(app(), memberId, '100');
+
+    const res = await sendCallback(app(), pspRef, 'completed', '10000000000000');
+
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('amount_mismatch');
+    expect(await outcomes(id)).toEqual(['AmountMismatch']);
+    expect((await walletState(walletId)).entries).toBe(0);
+  });
+
+  it('a failed callback with a zero amount is accepted: a failure moves no money', async () => {
+    const { memberId, walletId } = await createWallet();
+    const { id, pspRef } = await createDeposit(app(), memberId, '100');
+
+    const res = await sendCallback(app(), pspRef, 'failed', '0');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id, status: 'Failed', outcome: 'applied' });
+    await assertWalletInvariants(walletId);
+  });
+
+  it('lists deposits the PSP may have charged but we did not credit for reconciliation', async () => {
+    const { memberId } = await createWallet();
+    const mismatched = await createDeposit(app(), memberId, '100');
+    const failedThenCompleted = await createDeposit(app(), memberId, '50');
+    const healthy = await createDeposit(app(), memberId, '10');
+    const mismatchedThenFailed = await createDeposit(app(), memberId, '20');
+    await sendCallback(app(), mismatched.pspRef, 'completed', '1000');
+    await sendCallback(app(), mismatchedThenFailed.pspRef, 'completed', '2000');
+    await sendCallback(app(), mismatchedThenFailed.pspRef, 'failed', '20');
+    await sendCallback(app(), failedThenCompleted.pspRef, 'failed', '50');
+    await sendCallback(app(), failedThenCompleted.pspRef, 'completed', '50');
+    await sendCallback(app(), healthy.pspRef, 'completed', '10');
+
+    const queue = await rows<{ funding_tx_id: string }>('SELECT funding_tx_id FROM deposits_needing_reconciliation');
+
+    expect(queue.map((r) => r.funding_tx_id).sort()).toEqual(
+      [mismatched.id, failedThenCompleted.id, mismatchedThenFailed.id].sort(),
+    );
+
+    await sendCallback(app(), mismatched.pspRef, 'completed', '100');
+    expect(await rows('SELECT 1 FROM deposits_needing_reconciliation WHERE funding_tx_id = :id', { id: mismatched.id })).toEqual([]);
   });
 
   it('returns 404 for an unknown pspRef and records nothing', async () => {

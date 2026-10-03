@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { Wallet, WalletTx } from '../src/db/models';
 import { sequelize } from '../src/db/sequelize';
 import { assertWalletInvariants, useTestDb } from './helpers/db';
-import { createDeposit, createWallet, fundWallet, placeWager, sendCallback } from './helpers/factories';
+import { createWallet, fundWallet, placeWager } from './helpers/factories';
 import { useServer } from './helpers/server';
 
 useTestDb();
@@ -78,22 +78,6 @@ describe('POST /wallets/:walletId/wagers', () => {
       await holder.rollback();
     }
     expect((await Wallet.findByPk(walletId))!.balance).toBe('100.000000000000000000');
-    await assertWalletInvariants(walletId);
-  });
-
-  it('a late duplicate callback after the balance moved changes nothing', async () => {
-    const { memberId, walletId } = await createWallet();
-    const { pspRef } = await createDeposit(app(), memberId, '100');
-    await sendCallback(app(), pspRef, 'completed', '100');
-    await placeWager(app(), walletId, '40');
-
-    const late = await sendCallback(app(), pspRef, 'completed', '100');
-
-    expect(late.status).toBe(200);
-    expect(late.body.outcome).toBe('duplicate');
-    const wallet = await Wallet.findByPk(walletId);
-    expect(wallet!.balance).toBe('60.000000000000000000');
-    expect(await WalletTx.count({ where: { walletId } })).toBe(2);
     await assertWalletInvariants(walletId);
   });
 

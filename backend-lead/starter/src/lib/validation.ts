@@ -17,6 +17,10 @@ export const moneyString = z
       .refine((v) => dec(v).lte(MAX_AMOUNT), `must be at most ${MAX_AMOUNT}`),
   );
 
+// PSP callbacks only need a well-formed decimal that fits DECIMAL(36,18): an out-of-range or zero
+// amount must reach the service so it is compared, audited and rejected as a mismatch, not lost as a 400.
+export const callbackAmount = z.string().regex(/^(0|[1-9]\d{0,17})(\.\d{1,18})?$/, 'must be a decimal string');
+
 export const uuid = z.string().uuid();
 
 // Optional `Idempotency-Key` header for debits. Scoped per wallet.
