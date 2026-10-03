@@ -18,3 +18,6 @@ export const moneyString = z
   );
 
 export const uuid = z.string().uuid();
+
+// Optional `Idempotency-Key` header for debits. Scoped per wallet.
+export const idempotencyKey = z.string().min(1).max(64).optional();

@@ -32,10 +32,12 @@ export async function fundWallet(app: App, memberId: string, amount: string, tur
   return id;
 }
 
-export function placeWager(app: App, walletId: string, amount: string) {
-  return request(app).post(`/wallets/${walletId}/wagers`).send({ amount });
+export function placeWager(app: App, walletId: string, amount: string, idempotencyKey?: string) {
+  const req = request(app).post(`/wallets/${walletId}/wagers`);
+  return (idempotencyKey ? req.set('Idempotency-Key', idempotencyKey) : req).send({ amount });
 }
 
-export function requestWithdrawal(app: App, memberId: string, amount: string) {
-  return request(app).post('/withdrawals').send({ memberId, amount });
+export function requestWithdrawal(app: App, memberId: string, amount: string, idempotencyKey?: string) {
+  const req = request(app).post('/withdrawals');
+  return (idempotencyKey ? req.set('Idempotency-Key', idempotencyKey) : req).send({ memberId, amount });
 }

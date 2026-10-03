@@ -1,20 +1,29 @@
-import BigNumber from 'bignumber.js';
 import { FundingTx, Wallet } from '../db/models';
 import { sequelize } from '../db/sequelize';
 import { AppError } from '../lib/errors';
-import { dec, toMoneyString, ZERO } from '../lib/money';
+import { BigNumber, dec, toMoneyString, ZERO } from '../lib/money';
 import * as walletService from './walletService';
 
-// Turnover and balance are both read under the wallet lock, so a deposit completing or a wager landing
-// concurrently cannot slip between the check and the debit.
 export async function requestWithdrawal(
   memberId: string,
   amount: string,
-): Promise<{ withdrawal: FundingTx; wallet: Wallet }> {
+  idempotencyKey?: string,
+): Promise<{ withdrawal: FundingTx; wallet: Wallet; replayed: boolean }> {
   return sequelize.transaction(async (t) => {
     const wallet = await walletService.lockWallet(t, { memberId });
     if (!wallet) {
       throw new AppError(404, 'member_not_found');
+    }
+
+    // A retry returns the original withdrawal; it is not re-checked against today's turnover or balance.
+    const previous = await walletService.findReplay(t, wallet, idempotencyKey, 'Withdrawal', amount);
+    if (previous) {
+      const withdrawal = await FundingTx.findOne({
+        where: { id: previous.fundingTxId },
+        rejectOnEmpty: true,
+        transaction: t,
+      });
+      return { withdrawal, wallet, replayed: true };
     }
 
     // The anti-abuse rule is checked before the balance: it is the reason the client must act on first.
@@ -36,7 +45,8 @@ export async function requestWithdrawal(
       type: 'Withdrawal',
       amount: dec(amount).negated(),
       fundingTxId: withdrawal.id,
+      idempotencyKey,
     });
-    return { withdrawal, wallet };
+    return { withdrawal, wallet, replayed: false };
   });
 }

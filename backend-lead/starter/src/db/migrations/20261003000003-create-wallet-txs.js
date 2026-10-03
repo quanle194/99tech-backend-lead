@@ -23,6 +23,7 @@ module.exports = {
           turnover_required_after: { type: Sequelize.DECIMAL(36, 18), allowNull: false, defaultValue: '0' },
           turnover_accrued_after: { type: Sequelize.DECIMAL(36, 18), allowNull: false, defaultValue: '0' },
           funding_tx_id: { type: Sequelize.UUID, allowNull: true, references: { model: 'funding_txs', key: 'id' } },
+          idempotency_key: { type: Sequelize.STRING(64), allowNull: true },
           created_at: { type: Sequelize.DATE, allowNull: false, defaultValue: Sequelize.literal('now()') },
         },
         { transaction },
@@ -40,6 +41,13 @@ module.exports = {
         unique: true,
         name: 'wallet_txs_funding_tx_type_unique',
         where: { funding_tx_id: { [Sequelize.Op.ne]: null } },
+        transaction,
+      });
+      // A client retry with the same key can never produce a second debit on the same wallet.
+      await queryInterface.addIndex('wallet_txs', ['wallet_id', 'idempotency_key'], {
+        unique: true,
+        name: 'wallet_txs_wallet_idempotency_key_unique',
+        where: { idempotency_key: { [Sequelize.Op.ne]: null } },
         transaction,
       });
       await queryInterface.addIndex('wallet_txs', ['wallet_id', 'id'], { transaction });

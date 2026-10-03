@@ -4,7 +4,7 @@ import { WalletTxType } from '../db/models/walletTx';
 import { AppError } from '../lib/errors';
 import { BigNumber, dec, toMoneyString, ZERO } from '../lib/money';
 
-// The wallet row is the mutex for every change to its balance and turnover counters.
+// The wallet row is the mutex for every change to its balance, turnover and idempotency keys.
 // Lock order across the codebase: funding tx first, then wallet. NO KEY UPDATE still serialises
 // writers but does not block the KEY SHARE lock that inserting a deposit takes through its FK.
 export function lockWallet(t: Transaction, where: WhereOptions<Wallet>): Promise<Wallet | null> {
@@ -15,6 +15,7 @@ export interface LedgerEntry {
   type: WalletTxType;
   amount: BigNumber; // signed: credit > 0, debit < 0
   fundingTxId?: string;
+  idempotencyKey?: string;
   turnoverRequiredDelta?: BigNumber;
   turnoverAccruedDelta?: BigNumber;
 }
@@ -41,8 +42,28 @@ export async function applyEntry(t: Transaction, wallet: Wallet, entry: LedgerEn
       turnoverRequiredAfter: turnoverRequired,
       turnoverAccruedAfter: turnoverAccrued,
       fundingTxId: entry.fundingTxId ?? null,
+      idempotencyKey: entry.idempotencyKey ?? null,
     },
     { transaction: t },
   );
 }
 
+// Looks up an earlier debit made with the same Idempotency-Key. Callers must hold the wallet lock, so a
+// concurrent retry waits for the first request and then finds its entry here. Reusing a key for a
+// different request is refused rather than guessed at.
+export async function findReplay(
+  t: Transaction,
+  wallet: Wallet,
+  idempotencyKey: string | undefined,
+  type: WalletTxType,
+  amount: string,
+): Promise<WalletTx | null> {
+  if (!idempotencyKey) {
+    return null;
+  }
+  const previous = await WalletTx.findOne({ where: { walletId: wallet.id, idempotencyKey }, transaction: t });
+  if (previous && (previous.type !== type || !dec(previous.amount).abs().eq(amount))) {
+    throw new AppError(409, 'idempotency_key_reused', { idempotencyKey });
+  }
+  return previous;
+}

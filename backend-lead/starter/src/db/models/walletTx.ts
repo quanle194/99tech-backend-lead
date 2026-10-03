@@ -12,6 +12,7 @@ export class WalletTx extends Model {
   declare turnoverRequiredAfter: string;
   declare turnoverAccruedAfter: string;
   declare fundingTxId: string | null;
+  declare idempotencyKey: string | null;
 }
 
 export function initWalletTx(sequelize: Sequelize): void {
@@ -25,6 +26,7 @@ export function initWalletTx(sequelize: Sequelize): void {
       turnoverRequiredAfter: { type: DataTypes.DECIMAL(36, 18), allowNull: false, defaultValue: '0' },
       turnoverAccruedAfter: { type: DataTypes.DECIMAL(36, 18), allowNull: false, defaultValue: '0' },
       fundingTxId: { type: DataTypes.UUID, allowNull: true },
+      idempotencyKey: { type: DataTypes.STRING(64), allowNull: true },
     },
     { sequelize, tableName: 'wallet_txs', underscored: true, updatedAt: false },
   );
