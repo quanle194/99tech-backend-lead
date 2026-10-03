@@ -31,3 +31,7 @@ export async function fundWallet(app: App, memberId: string, amount: string, tur
   expect(res.status).toBe(200);
   return id;
 }
+
+export function placeWager(app: App, walletId: string, amount: string) {
+  return request(app).post(`/wallets/${walletId}/wagers`).send({ amount });
+}
